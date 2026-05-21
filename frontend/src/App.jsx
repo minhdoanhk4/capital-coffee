@@ -13,25 +13,65 @@ const getLocalDateString = (date) => {
 }
 
 function App() {
-  const [currentView, setCurrentView] = useState('dashboard')
+  const [currentView, setCurrentView] = useState(localStorage.getItem('currentView') || 'dashboard')
   const [branches, setBranches] = useState([])
   const [employees, setEmployees] = useState([])
   const [menuItems, setMenuItems] = useState([])
   const [dbSchedules, setDbSchedules] = useState([]) // From DB
   
   // Auth state (Current Branch)
-  const [currentBranch, setCurrentBranch] = useState(null)
+  const [currentBranch, setCurrentBranch] = useState(() => {
+    const saved = localStorage.getItem('currentBranch')
+    return saved ? JSON.parse(saved) : null
+  })
   
   // Hub view states ('scheduling' | 'timekeeping' | null)
-  const [hubView, setHubView] = useState(null)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [hubView, setHubView] = useState(localStorage.getItem('hubView') || null)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(localStorage.getItem('isSidebarCollapsed') === 'true')
   
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark')
+  const [showScrollTop, setShowScrollTop] = useState(false)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme])
+
+  useEffect(() => {
+    localStorage.setItem('currentView', currentView)
+  }, [currentView])
+
+  useEffect(() => {
+    if (currentBranch) {
+      localStorage.setItem('currentBranch', JSON.stringify(currentBranch))
+    } else {
+      localStorage.removeItem('currentBranch')
+    }
+  }, [currentBranch])
+
+  useEffect(() => {
+    if (hubView) {
+      localStorage.setItem('hubView', hubView)
+    } else {
+      localStorage.removeItem('hubView')
+    }
+  }, [hubView])
+
+  useEffect(() => {
+    localStorage.setItem('isSidebarCollapsed', isSidebarCollapsed)
+  }, [isSidebarCollapsed])
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 300);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   
   // Modal visibility states
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
@@ -59,12 +99,14 @@ function App() {
 
   // Scheduling local state (mapped from DB)
   const [viewMode, setViewMode] = useState('month') // Default to month for new view
+  const [showViewDropdown, setShowViewDropdown] = useState(false) // View picker dropdown
   const [selectedDate, setSelectedDate] = useState(new Date()) // Current selected date for calendar
   const [activeCell, setActiveCell] = useState(null) // { empId, date }
   const [activeMonthEmp, setActiveMonthEmp] = useState(null) // For month view details
   const [timekeepingDate, setTimekeepingDate] = useState(getLocalDateString(new Date()))
   const [candidateInputs, setCandidateInputs] = useState({}) // { [empId_shift]: { present: false, lateMinutes: 0 } }
   const [tempSchedule, setTempSchedule] = useState({ S: '', C: '' })
+  const [bulkSchedules, setBulkSchedules] = useState({})
   
   // All timekeeping records for coloring the calendar bars
   const [dbTimekeepings, setDbTimekeepings] = useState([])
@@ -123,6 +165,24 @@ function App() {
     fetchSchedules()
     fetchAllTimekeepingRecords()
   }, [])
+
+  // Initialize bulkSchedules when activeCell modal opens
+  useEffect(() => {
+    if (activeCell && activeCell.date) {
+      const initial = {};
+      employees.filter(e => e.status === 'active').forEach(e => {
+        const morning = dbSchedules.find(s => s.employee_id === e.id && s.work_date === activeCell.date && s.shift === 'S');
+        const afternoon = dbSchedules.find(s => s.employee_id === e.id && s.work_date === activeCell.date && s.shift === 'C');
+        initial[e.id] = {
+          mBranch: morning ? morning.branch_id : '',
+          aBranch: afternoon ? afternoon.branch_id : ''
+        };
+      });
+      setBulkSchedules(initial);
+    } else {
+      setBulkSchedules({});
+    }
+  }, [activeCell, employees, dbSchedules]);
 
   // Unified fetch for menu items with search and branch filtering
   useEffect(() => {
@@ -335,6 +395,62 @@ function App() {
       if (res.ok) fetchEmployees()
     } catch (err) { console.error(err) }
   }
+
+  const handleBulkSave = async () => {
+    try {
+      const promises = [];
+      const dateStr = activeCell.date;
+      
+      for (const empId of Object.keys(bulkSchedules)) {
+        const { mBranch, aBranch } = bulkSchedules[empId];
+        
+        // Find existing schedules in DB to compare
+        const existingMorning = dbSchedules.find(s => s.employee_id === parseInt(empId) && s.work_date === dateStr && s.shift === 'S');
+        const existingAfternoon = dbSchedules.find(s => s.employee_id === parseInt(empId) && s.work_date === dateStr && s.shift === 'C');
+        
+        const existingMBranch = existingMorning ? existingMorning.branch_id : '';
+        const existingABranch = existingAfternoon ? existingAfternoon.branch_id : '';
+        
+        // If nothing changed for this employee, do not touch the DB!
+        if (mBranch === existingMBranch && aBranch === existingABranch) {
+          continue;
+        }
+        
+        promises.push((async () => {
+          // Clear current schedules for this employee on this date
+          await fetch(`${API_URL}/schedules/clear?employeeId=${empId}&workDate=${dateStr}`, { method: 'DELETE' });
+          
+          // Insert new morning schedule if set
+          if (mBranch) {
+            await fetch(`${API_URL}/schedules`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ employee_id: parseInt(empId), branch_id: parseInt(mBranch), work_date: dateStr, shift: 'S' })
+            });
+          }
+          
+          // Insert new afternoon schedule if set
+          if (aBranch) {
+            await fetch(`${API_URL}/schedules`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ employee_id: parseInt(empId), branch_id: parseInt(aBranch), work_date: dateStr, shift: 'C' })
+            });
+          }
+        })());
+      }
+      
+      if (promises.length > 0) {
+        await Promise.all(promises);
+        alert('Đã lưu lịch sắp ca thành công!');
+        fetchSchedules();
+      }
+      setActiveCell(null);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi hệ thống khi lưu ca làm việc!');
+    }
+  };
 
   const handleDeleteMenuItem = async (id) => {
     if (!window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) return
@@ -691,25 +807,20 @@ function App() {
             <div className="card">
               <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                 <h2 style={{marginBottom: 0}}>Danh Mục Sản Phẩm</h2>
-                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div className="search-box">
-                    <input 
-                      type="text" 
-                      placeholder="Tìm sản phẩm..." 
-                      value={menuSearchQuery} 
-                      onChange={e => setMenuSearchQuery(e.target.value)} 
-                      className="search-input"
-                    />
-                    <i className="ph ph-magnifying-glass search-icon"></i>
-                    {menuSearchQuery && (
-                      <button className="search-clear-btn" onClick={() => setMenuSearchQuery('')}>
-                        <i className="ph ph-x"></i>
-                      </button>
-                    )}
-                  </div>
-                  <button onClick={() => setShowMenuModal(true)} className="btn btn-primary">
-                    <i className="ph ph-plus-circle" style={{fontSize: '1.2rem'}}></i> Thêm Sản Phẩm
-                  </button>
+                <div className="search-box">
+                  <input 
+                    type="text" 
+                    placeholder="Tìm sản phẩm..." 
+                    value={menuSearchQuery} 
+                    onChange={e => setMenuSearchQuery(e.target.value)} 
+                    className="search-input"
+                  />
+                  <i className="ph ph-magnifying-glass search-icon"></i>
+                  {menuSearchQuery && (
+                    <button className="search-clear-btn" onClick={() => setMenuSearchQuery('')}>
+                      <i className="ph ph-x"></i>
+                    </button>
+                  )}
                 </div>
               </div>
               
@@ -1163,39 +1274,29 @@ function App() {
   if (hubView) {
     // Scheduling View
     const renderScheduling = () => {
-      return (
-        <div className={`scheduling-main ${isSidebarCollapsed ? 'expanded' : ''}`} style={{flex: 1, padding: '2rem 3rem', transition: 'padding 0.3s'}}>
-          <div style={{width: '100%'}}>
-            <div className="section-header" style={{marginBottom: '2rem', borderBottom: 'none'}}>
-            <div>
-              <h1 className="title" style={{marginBottom: 0}}>Bảng Sắp Ca Tháng</h1>
-              <p style={{color: 'var(--text-secondary)', fontSize: '0.95rem', marginTop: '0.25rem'}}>Quản lý lịch làm việc toàn hệ thống.</p>
-            </div>
-            <div style={{display: 'flex', gap: '1rem', flexWrap: 'wrap'}}>
-              <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '1rem'}}>
-                <button className="btn btn-outline" style={{padding: '0.5rem', minWidth: '40px', background: 'var(--bg-secondary)', borderColor: 'var(--border)'}} onClick={() => {
-                  const prev = new Date(selectedDate); prev.setMonth(prev.getMonth() - 1); setSelectedDate(prev);
-                }}><i className="ph ph-caret-left"></i></button>
-                <div style={{textAlign: 'center', background: 'var(--bg-input)', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border-light)', fontSize: '0.95rem', fontWeight: '500'}}>
-                  Tháng {selectedDate.getMonth() + 1}/{selectedDate.getFullYear()}
-                </div>
-                <button className="btn btn-outline" style={{padding: '0.5rem', minWidth: '40px', background: 'var(--bg-secondary)', borderColor: 'var(--border)'}} onClick={() => {
-                  const next = new Date(selectedDate); next.setMonth(next.getMonth() + 1); setSelectedDate(next);
-                }}><i className="ph ph-caret-right"></i></button>
-              </div>
-              <button onClick={() => setShowEmployeeModal(true)} className="btn btn-primary">
-                <i className="ph ph-plus-circle" style={{fontSize: '1.2rem'}}></i> Thêm Nhân Viên
-              </button>
-            </div>
-          </div>
-          
+      let dateText = '';
+      if (viewMode === 'month') {
+        dateText = `Tháng ${selectedDate.getMonth() + 1}/${selectedDate.getFullYear()}`;
+      } else if (viewMode === 'week') {
+        const startOfWeek = new Date(selectedDate);
+        const day = startOfWeek.getDay();
+        const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+        startOfWeek.setDate(diff);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(endOfWeek.getDate() + 6);
+        dateText = `${startOfWeek.getDate()}/${startOfWeek.getMonth()+1} - ${endOfWeek.getDate()}/${endOfWeek.getMonth()+1}/${endOfWeek.getFullYear()}`;
+      } else {
+        dateText = `${selectedDate.getDate()}/${selectedDate.getMonth()+1}/${selectedDate.getFullYear()}`;
+      }
+
+      const renderMonthView = () => {
+        return (
           <div className="calendar-grid">
             {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(day => (
               <div key={day} className="calendar-header">{day}</div>
             ))}
             
             {(() => {
-              // Get month calendar layout
               const year = selectedDate.getFullYear();
               const month = selectedDate.getMonth();
               const firstDay = new Date(year, month, 1).getDay();
@@ -1208,15 +1309,10 @@ function App() {
                 const dayDate = i + 1;
                 const fullDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(dayDate).padStart(2, '0')}`;
                 
-                // Find schedules for this day
                 const daySchedules = dbSchedules.filter(s => s.work_date === fullDate);
-                
-                // Group by shift
                 const morningCount = daySchedules.filter(s => s.shift === 'S').length;
                 const afternoonCount = daySchedules.filter(s => s.shift === 'C').length;
                 
-                // Check timekeeping status
-                // A shift is fully checked in if all scheduled employees for that shift have a timekeeping record
                 const morningTimekeepings = dbTimekeepings.filter(t => t.work_date.startsWith(fullDate) && t.shift === 'S').length;
                 const afternoonTimekeepings = dbTimekeepings.filter(t => t.work_date.startsWith(fullDate) && t.shift === 'C').length;
                 
@@ -1231,10 +1327,7 @@ function App() {
                 const isToday = fullDate === todayStr;
                 
                 return (
-                  <div key={dayDate} className={`calendar-cell ${isToday ? 'is-today' : ''}`} onClick={() => {
-                    // Open the schedule edit modal for this day
-                    setActiveCell({ date: fullDate }); 
-                  }}>
+                  <div key={dayDate} className={`calendar-cell ${isToday ? 'is-today' : ''}`} onClick={() => setActiveCell({ date: fullDate })}>
                     <div className="calendar-date">{dayDate}</div>
                     {hasSchedules && (
                       <div className={`calendar-shift-bar ${isFullyCheckedIn ? 'checked-in' : 'not-checked-in'}`} title={`Có ca (${totalCount} nhân viên)`}></div>
@@ -1246,6 +1339,183 @@ function App() {
               return [...blanks, ...days];
             })()}
           </div>
+        );
+      };
+
+      const renderWeekView = () => {
+        const startOfWeek = new Date(selectedDate);
+        const day = startOfWeek.getDay();
+        const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+        startOfWeek.setDate(diff);
+
+        const days = Array.from({length: 7}, (_, i) => {
+          const d = new Date(startOfWeek);
+          d.setDate(d.getDate() + i);
+          return d;
+        });
+
+        const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+        return (
+          <>
+            {days.map((d, i) => {
+              const dateStr = getLocalDateString(d);
+              const isToday = dateStr === getLocalDateString(new Date());
+              
+              const daySchedules = dbSchedules.filter(s => s.work_date === dateStr);
+              const morningSchedules = daySchedules.filter(s => s.shift === 'S');
+              const afternoonSchedules = daySchedules.filter(s => s.shift === 'C');
+
+              return (
+                <div key={dateStr} className={`card ${isToday ? 'border-primary' : ''}`} style={{padding: '1rem', cursor: 'pointer', transition: 'transform 0.2s', border: isToday ? '1px solid var(--accent)' : ''}} onClick={() => setActiveCell({ date: dateStr })}>
+                  <div style={{textAlign: 'center', marginBottom: '1rem'}}>
+                    <div style={{fontSize: '0.9rem', color: 'var(--text-secondary)'}}>{dayNames[d.getDay()]}</div>
+                    <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: isToday ? 'var(--accent)' : 'var(--text-primary)'}}>{d.getDate()}</div>
+                  </div>
+                  
+                  <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+                    <div style={{background: 'var(--bg-input)', padding: '0.5rem', borderRadius: '6px', fontSize: '0.85rem'}}>
+                      <div style={{fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.25rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.25rem'}}>☀️ Sáng ({morningSchedules.length})</div>
+                      {morningSchedules.length > 0 ? morningSchedules.map(s => {
+                        const emp = employees.find(e => e.id === s.employee_id);
+                        return <div key={s.id} style={{color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{emp ? emp.full_name : '...'}</div>;
+                      }) : <div style={{color: 'var(--text-secondary)', opacity: 0.5}}>- Trống -</div>}
+                    </div>
+                    <div style={{background: 'var(--bg-input)', padding: '0.5rem', borderRadius: '6px', fontSize: '0.85rem'}}>
+                      <div style={{fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.25rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.25rem'}}>🌙 Chiều ({afternoonSchedules.length})</div>
+                      {afternoonSchedules.length > 0 ? afternoonSchedules.map(s => {
+                        const emp = employees.find(e => e.id === s.employee_id);
+                        return <div key={s.id} style={{color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{emp ? emp.full_name : '...'}</div>;
+                      }) : <div style={{color: 'var(--text-secondary)', opacity: 0.5}}>- Trống -</div>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        );
+      };
+
+      const renderDayView = () => {
+        const dateStr = getLocalDateString(selectedDate);
+        const dayNames = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+        
+        const daySchedules = dbSchedules.filter(s => s.work_date === dateStr);
+        const morningSchedules = daySchedules.filter(s => s.shift === 'S');
+        const afternoonSchedules = daySchedules.filter(s => s.shift === 'C');
+
+        const renderShiftBlock = (title, schedules, icon) => (
+          <div className="card" style={{flex: 1}}>
+            <h3 style={{display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '1rem', marginBottom: '1rem'}}>
+              <span>{icon}</span> {title} ({schedules.length} nhân viên)
+            </h3>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+              {schedules.length > 0 ? schedules.map(s => {
+                const emp = employees.find(e => e.id === s.employee_id);
+                const branch = branches.find(b => b.id === s.branch_id);
+                return (
+                  <div key={s.id} style={{background: 'var(--bg-input)', padding: '1rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <div style={{fontWeight: '500'}}>{emp ? emp.full_name : '...'}</div>
+                    <div className="badge" style={{background: 'var(--bg-secondary)', border: '1px solid var(--border-light)'}}>{branch ? branch.name : '...'}</div>
+                  </div>
+                );
+              }) : <div style={{padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-input)', borderRadius: '8px'}}>Không có nhân viên trong ca này</div>}
+            </div>
+          </div>
+        );
+
+        return (
+          <div>
+            <div style={{marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+              <h2 style={{margin: 0}}>{dayNames[selectedDate.getDay()]}, {selectedDate.getDate()}/{selectedDate.getMonth()+1}/{selectedDate.getFullYear()}</h2>
+              <button className="btn btn-outline" onClick={() => setActiveCell({ date: dateStr })}><i className="ph ph-pencil-simple"></i> Cập nhật ca làm</button>
+            </div>
+            <div className="day-grid" style={{display: 'flex', gap: '2rem'}}>
+              {renderShiftBlock('Ca Sáng (07:00 - 12:00)', morningSchedules, '☀️')}
+              {renderShiftBlock('Ca Chiều (12:00 - 17:00)', afternoonSchedules, '🌙')}
+            </div>
+          </div>
+        );
+      };
+
+      return (
+        <div className={`scheduling-main ${isSidebarCollapsed ? 'expanded' : ''}`} style={{flex: 1, padding: '2rem 3rem', transition: 'padding 0.3s', display: 'flex', flexDirection: 'column'}}>
+          <div className="scheduling-toolbar" style={{width: '100%', marginBottom: '1.5rem'}}>
+            {/* Row 1: Title + View Dropdown Button */}
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', marginBottom: '0.85rem'}}>
+              <div>
+                <h1 className="title" style={{marginBottom: 0}}>Bảng Sắp Ca Hệ Thống</h1>
+                <p className="scheduling-toolbar-subtitle" style={{color: 'var(--text-secondary)', fontSize: '0.95rem', marginTop: '0.25rem'}}>Quản lý lịch làm việc theo Tháng, Tuần và Ngày.</p>
+              </div>
+              {/* View Picker — Outlook-style hamburger dropdown */}
+              <div style={{position: 'relative'}}>
+                <button
+                  className="btn btn-secondary"
+                  style={{display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.85rem', whiteSpace: 'nowrap'}}
+                  onClick={() => setShowViewDropdown(v => !v)}
+                >
+                  <i className="ph ph-list" style={{fontSize: '1.1rem'}}></i>
+                  <span className="view-dropdown-label">
+                    {viewMode === 'month' ? 'Tháng' : viewMode === 'week' ? 'Tuần' : 'Ngày'}
+                  </span>
+                  <i className={`ph ph-caret-${showViewDropdown ? 'up' : 'down'}`} style={{fontSize: '0.85rem'}}></i>
+                </button>
+                {showViewDropdown && (
+                  <>
+                    {/* Backdrop to close on outside click */}
+                    <div style={{position: 'fixed', inset: 0, zIndex: 199}} onClick={() => setShowViewDropdown(false)} />
+                    <div className="view-dropdown-menu">
+                      {[
+                        { key: 'month', label: 'Tháng', icon: 'ph-calendar-blank' },
+                        { key: 'week',  label: 'Tuần',  icon: 'ph-calendar-check' },
+                        { key: 'day',   label: 'Ngày',  icon: 'ph-calendar-dot'   },
+                      ].map(opt => (
+                        <div
+                          key={opt.key}
+                          className={`view-dropdown-item ${viewMode === opt.key ? 'active' : ''}`}
+                          onClick={() => { setViewMode(opt.key); setShowViewDropdown(false); }}
+                        >
+                          <i className={`ph ${opt.icon}`}></i>
+                          {opt.label}
+                          {viewMode === opt.key && <i className="ph ph-check" style={{marginLeft: 'auto'}}></i>}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            {/* Row 2: Date Navigation + Action Button */}
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%'}}>
+              <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                <button className="btn btn-outline" style={{padding: '0.5rem', minWidth: '36px', background: 'var(--bg-secondary)', borderColor: 'var(--border)'}} onClick={() => {
+                  const prev = new Date(selectedDate);
+                  if (viewMode === 'month') prev.setMonth(prev.getMonth() - 1);
+                  else if (viewMode === 'week') prev.setDate(prev.getDate() - 7);
+                  else prev.setDate(prev.getDate() - 1);
+                  setSelectedDate(prev);
+                }}><i className="ph ph-caret-left"></i></button>
+                <div style={{textAlign: 'center', background: 'var(--bg-input)', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border-light)', fontSize: '0.95rem', fontWeight: '500'}}>
+                  {dateText}
+                </div>
+                <button className="btn btn-outline" style={{padding: '0.5rem', minWidth: '36px', background: 'var(--bg-secondary)', borderColor: 'var(--border)'}} onClick={() => {
+                  const next = new Date(selectedDate);
+                  if (viewMode === 'month') next.setMonth(next.getMonth() + 1);
+                  else if (viewMode === 'week') next.setDate(next.getDate() + 7);
+                  else next.setDate(next.getDate() + 1);
+                  setSelectedDate(next);
+                }}><i className="ph ph-caret-right"></i></button>
+              </div>
+              <button onClick={() => setShowEmployeeModal(true)} className="btn btn-primary">
+                <i className="ph ph-plus-circle" style={{fontSize: '1.1rem'}}></i> Thêm NV
+              </button>
+            </div>
+          </div>
+          
+          <div style={{width: '100%', maxWidth: '1200px', margin: '0 auto'}}>
+            {viewMode === 'month' && renderMonthView()}
+            {viewMode === 'week' && <div className="week-grid" style={{display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1rem'}}>{renderWeekView()}</div>}
+            {viewMode === 'day' && renderDayView()}
           </div>
         </div>
       );
@@ -1444,7 +1714,7 @@ function App() {
                 <table className="no-hover-table">
                   <thead>
                     <tr>
-                      <th>ID</th>
+                      <th>STT</th>
                       <th>Tên nhân viên</th>
                       <th>SĐT</th>
                       <th>Mức lương / giờ</th>
@@ -1453,9 +1723,9 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {employees.map(emp => (
+                    {employees.map((emp, index) => (
                       <tr key={emp.id}>
-                        <td>{emp.id}</td>
+                        <td>{index + 1}</td>
                         <td style={{fontWeight: '600'}}>{emp.full_name}</td>
                         <td>{emp.phone || '—'}</td>
                         <td>{emp.hourly_rate.toLocaleString()} đ</td>
@@ -1498,48 +1768,53 @@ function App() {
     };
 
     return (
-      <div className="scheduling-container" style={{display: 'flex', background: 'var(--bg-primary)', minHeight: '100vh'}}>
+      <div className="scheduling-container" style={{display: 'flex', width: '100%', background: 'var(--bg-primary)', minHeight: '100vh'}}>
         {/* Hub Sidebar */}
         <div className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`} style={{position: 'sticky', top: 0, height: '100vh', overflowY: 'auto'}}>
-          <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem'}}>
-            <div className="logo">
+          <div style={{display: 'flex', alignItems: 'center', justifyContent: isSidebarCollapsed ? 'center' : 'flex-start', marginBottom: '1rem', width: '100%'}}>
+            <div className="logo" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} style={{cursor: 'pointer', display: 'flex', justifyContent: 'center'}} title={isSidebarCollapsed ? "Capital Hub" : ""}>
               <img src="/logo_icon.png" alt="Logo" style={{height: '32px', width: '32px', borderRadius: '50%', objectFit: 'cover'}} /> <span>Capital Hub</span>
             </div>
-            <button className="sidebar-toggle" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
-              <i className={`ph ${isSidebarCollapsed ? 'ph-list' : 'ph-caret-left'}`}></i>
-            </button>
           </div>
 
           <ul className="nav-links">
             <li>
-              <div className={`nav-link ${hubView === 'scheduling' ? 'active' : ''}`} onClick={() => setHubView('scheduling')}>
+              <div className={`nav-link ${hubView === 'scheduling' ? 'active' : ''}`} onClick={() => setHubView('scheduling')} title={isSidebarCollapsed ? "Sắp Ca" : ""}>
                 <i className="ph ph-calendar-plus" style={{fontSize: '1.2rem'}}></i> <span>Sắp Ca</span>
               </div>
             </li>
             <li>
-              <div className={`nav-link ${hubView === 'timekeeping' ? 'active' : ''}`} onClick={() => setHubView('timekeeping')}>
+              <div className={`nav-link ${hubView === 'timekeeping' ? 'active' : ''}`} onClick={() => setHubView('timekeeping')} title={isSidebarCollapsed ? "Chấm Công" : ""}>
                 <i className="ph ph-clock" style={{fontSize: '1.2rem'}}></i> <span>Chấm Công</span>
               </div>
             </li>
             <li>
-              <div className={`nav-link ${hubView === 'employees' ? 'active' : ''}`} onClick={() => setHubView('employees')}>
+              <div className={`nav-link ${hubView === 'employees' ? 'active' : ''}`} onClick={() => setHubView('employees')} title={isSidebarCollapsed ? "Nhân Viên" : ""}>
                 <i className="ph ph-users" style={{fontSize: '1.2rem'}}></i> <span>Nhân Viên</span>
               </div>
             </li>
           </ul>
           
           <div style={{marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem'}}>
-             <button 
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="btn btn-secondary"
-                style={{width: '100%', display: 'flex', justifyContent: isSidebarCollapsed ? 'center' : 'flex-start', border: 'none'}}
-              >
-                {theme === 'dark' ? <i className="ph ph-sun" style={{fontSize: '1.2rem'}}></i> : <i className="ph ph-moon" style={{fontSize: '1.2rem'}}></i>}
-                {!isSidebarCollapsed && <span style={{marginLeft: '0.5rem'}}>Giao diện {theme === 'dark' ? 'Sáng' : 'Tối'}</span>}
-              </button>
-            <button className="btn btn-outline" style={{width: '100%', padding: isSidebarCollapsed ? '0.75rem' : '1rem', justifyContent: isSidebarCollapsed ? 'center' : 'center'}} onClick={() => setHubView(null)}>
-              <i className="ph ph-sign-out"></i> {!isSidebarCollapsed && <span>Thoát Hub</span>}
+            <button 
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="sidebar-toggle"
+              title={isSidebarCollapsed ? "Giao diện" : ""}
+              style={{width: '100%', display: 'flex', justifyContent: isSidebarCollapsed ? 'center' : 'flex-start', padding: '0.75rem', borderRadius: '8px'}}
+            >
+              {theme === 'dark' ? <i className="ph ph-sun" style={{fontSize: '1.2rem'}}></i> : <i className="ph ph-moon" style={{fontSize: '1.2rem'}}></i>}
+              {!isSidebarCollapsed && <span style={{marginLeft: '0.75rem', fontWeight: 500}}>Giao diện {theme === 'dark' ? 'Sáng' : 'Tối'}</span>}
             </button>
+            
+            <button className="sidebar-toggle" style={{width: '100%', padding: '0.75rem', display: 'flex', justifyContent: isSidebarCollapsed ? 'center' : 'flex-start', alignItems: 'center', borderRadius: '8px'}} onClick={() => setHubView(null)} title={isSidebarCollapsed ? "Thoát Hub" : ""}>
+              <i className="ph ph-sign-out" style={{fontSize: '1.2rem'}}></i> {!isSidebarCollapsed && <span style={{marginLeft: '0.75rem', fontWeight: 500}}>Thoát Hub</span>}
+            </button>
+
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button className="sidebar-toggle" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} title={isSidebarCollapsed ? "Mở rộng Sidebar" : "Thu gọn Sidebar"} style={{ background: 'var(--sidebar-active-bg)', border: '1px solid var(--sidebar-border)', borderRadius: '8px', width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                <i className={`ph ${isSidebarCollapsed ? 'ph-list' : 'ph-caret-left'}`} style={{fontSize: '1.2rem'}}></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1559,27 +1834,46 @@ function App() {
                 >
                   {theme === 'dark' ? <i className="ph ph-sun" style={{fontSize: '1.2rem'}}></i> : <i className="ph ph-moon" style={{fontSize: '1.2rem'}}></i>}
                 </button>
-                <button 
-                  className="btn btn-danger btn-small" 
-                  onClick={() => setHubView(null)}
-                  style={{display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.75rem', borderRadius: '8px'}}
-                >
-                  <i className="ph ph-sign-out"></i> Thoát
-                </button>
-              </div>
-            </div>
-            <div className="hub-mobile-tabs">
-              <div className={`hub-mobile-tab ${hubView === 'scheduling' ? 'active' : ''}`} onClick={() => setHubView('scheduling')}>
-                <i className="ph ph-calendar-plus"></i> Sắp Ca
-              </div>
-              <div className={`hub-mobile-tab ${hubView === 'timekeeping' ? 'active' : ''}`} onClick={() => setHubView('timekeeping')}>
-                <i className="ph ph-clock"></i> Chấm Công
-              </div>
-              <div className={`hub-mobile-tab ${hubView === 'employees' ? 'active' : ''}`} onClick={() => setHubView('employees')}>
-                <i className="ph ph-users"></i> Nhân Viên
+                {hubView !== 'menu' ? (
+                  <button 
+                    className="btn btn-secondary btn-small" 
+                    onClick={() => setHubView('menu')}
+                    style={{display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.75rem', borderRadius: '8px'}}
+                  >
+                    <i className="ph ph-arrow-left"></i> Quay lại
+                  </button>
+                ) : (
+                  <button 
+                    className="btn btn-danger btn-small" 
+                    onClick={() => setHubView(null)}
+                    style={{display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.75rem', borderRadius: '8px'}}
+                  >
+                    <i className="ph ph-sign-out"></i> Thoát
+                  </button>
+                )}
               </div>
             </div>
           </div>
+
+          {hubView === 'menu' && (
+            <div style={{padding: '1.5rem'}}>
+              <h2 style={{marginBottom: '1.5rem', color: 'var(--title-color)'}}>Menu Hệ Thống</h2>
+              <div className="menu-grid">
+                <div className="card" onClick={() => setHubView('scheduling')} style={{cursor: 'pointer', textAlign: 'center'}}>
+                  <i className="ph ph-calendar-plus" style={{fontSize: '2rem', color: 'var(--accent)'}}></i>
+                  <h3 style={{fontSize: '1rem', marginTop: '0.5rem'}}>Sắp Ca</h3>
+                </div>
+                <div className="card" onClick={() => setHubView('timekeeping')} style={{cursor: 'pointer', textAlign: 'center'}}>
+                  <i className="ph ph-clock" style={{fontSize: '2rem', color: 'var(--accent)'}}></i>
+                  <h3 style={{fontSize: '1rem', marginTop: '0.5rem'}}>Chấm Công</h3>
+                </div>
+                <div className="card" onClick={() => setHubView('employees')} style={{cursor: 'pointer', textAlign: 'center'}}>
+                  <i className="ph ph-users" style={{fontSize: '2rem', color: 'var(--accent)'}}></i>
+                  <h3 style={{fontSize: '1rem', marginTop: '0.5rem'}}>Nhân Viên</h3>
+                </div>
+              </div>
+            </div>
+          )}
 
           {hubView === 'scheduling' && renderScheduling()}
           {hubView === 'timekeeping' && renderTimekeeping()}
@@ -1602,75 +1896,85 @@ function App() {
                       <th>Nhân Viên</th>
                       <th>Ca Sáng</th>
                       <th>Ca Chiều</th>
-                      <th>Thao tác</th>
+                      <th style={{textAlign: 'center'}}>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {employees.filter(e => e.status === 'active').map(e => {
-                      const morning = dbSchedules.find(s => s.employee_id === e.id && s.work_date === activeCell.date && s.shift === 'S');
-                      const afternoon = dbSchedules.find(s => s.employee_id === e.id && s.work_date === activeCell.date && s.shift === 'C');
+                      const currentBulk = bulkSchedules[e.id] || { mBranch: '', aBranch: '' };
                       
-                      const EmployeeRow = () => {
-                        const [mBranch, setMBranch] = useState(morning ? morning.branch_id : '');
-                        const [aBranch, setABranch] = useState(afternoon ? afternoon.branch_id : '');
-                        
-                        const handleSaveRow = async () => {
-                           try {
-                              await fetch(`${API_URL}/schedules/clear?employeeId=${e.id}&workDate=${activeCell.date}`, { method: 'DELETE' });
-                              if (mBranch) {
-                                await fetch(`${API_URL}/schedules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employee_id: e.id, branch_id: mBranch, work_date: activeCell.date, shift: 'S' }) });
-                              }
-                              if (aBranch) {
-                                await fetch(`${API_URL}/schedules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employee_id: e.id, branch_id: aBranch, work_date: activeCell.date, shift: 'C' }) });
-                              }
-                              fetchSchedules();
-                              alert('Đã lưu ca cho ' + e.full_name);
-                           } catch (err) { console.error(err); }
-                        };
-                        
-                        const handleDeleteRow = async () => {
-                           if (confirm(`Xóa toàn bộ ca của ${e.full_name} trong ngày này?`)) {
-                             try {
-                               await fetch(`${API_URL}/schedules/clear?employeeId=${e.id}&workDate=${activeCell.date}`, { method: 'DELETE' });
-                               setMBranch('');
-                               setABranch('');
-                               fetchSchedules();
-                             } catch (err) { console.error(err); }
-                           }
-                        };
-                        
-                        return (
-                          <tr>
-                            <td style={{fontWeight: '600'}}>{e.full_name}</td>
-                            <td>
-                              <select value={mBranch} onChange={ev => setMBranch(ev.target.value ? parseInt(ev.target.value) : '')}>
-                                <option value="">-- Trống --</option>
-                                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                              </select>
-                            </td>
-                            <td>
-                              <select value={aBranch} onChange={ev => setABranch(ev.target.value ? parseInt(ev.target.value) : '')}>
-                                <option value="">-- Trống --</option>
-                                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                              </select>
-                            </td>
-                            <td>
-                              <div style={{display: 'flex', gap: '0.5rem'}}>
-                                <button className="btn btn-primary btn-small" onClick={handleSaveRow}>Lưu</button>
-                                {(morning || afternoon) && (
-                                  <button className="btn btn-outline btn-small" style={{borderColor: 'var(--color-danger)', color: 'var(--color-danger)', padding: '0.25rem 0.5rem'}} onClick={handleDeleteRow} title="Xóa toàn bộ ca trong ngày">
-                                    <i className="ph ph-trash"></i>
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      };
-                      return <EmployeeRow key={e.id} />;
+                      return (
+                        <tr key={e.id}>
+                          <td style={{fontWeight: '600'}}>{e.full_name}</td>
+                          <td>
+                            <select 
+                              value={currentBulk.mBranch} 
+                              onChange={ev => {
+                                const val = ev.target.value ? parseInt(ev.target.value) : '';
+                                setBulkSchedules(prev => ({
+                                  ...prev,
+                                  [e.id]: {
+                                    ...prev[e.id],
+                                    mBranch: val
+                                  }
+                                }));
+                              }}
+                            >
+                              <option value="">-- Trống --</option>
+                              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </select>
+                          </td>
+                          <td>
+                            <select 
+                              value={currentBulk.aBranch} 
+                              onChange={ev => {
+                                const val = ev.target.value ? parseInt(ev.target.value) : '';
+                                setBulkSchedules(prev => ({
+                                  ...prev,
+                                  [e.id]: {
+                                    ...prev[e.id],
+                                    aBranch: val
+                                  }
+                                }));
+                              }}
+                            >
+                              <option value="">-- Trống --</option>
+                              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </select>
+                          </td>
+                          <td>
+                            <div style={{display: 'flex', gap: '0.5rem', justifyContent: 'center'}}>
+                              {(currentBulk.mBranch || currentBulk.aBranch) && (
+                                <button 
+                                  className="btn btn-outline btn-small" 
+                                  style={{borderColor: 'var(--color-danger)', color: 'var(--color-danger)', padding: '0.25rem 0.5rem', minWidth: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center'}} 
+                                  onClick={() => {
+                                    setBulkSchedules(prev => ({
+                                      ...prev,
+                                      [e.id]: {
+                                        mBranch: '',
+                                        aBranch: ''
+                                      }
+                                    }));
+                                  }} 
+                                  title="Xóa toàn bộ ca trong ngày"
+                                >
+                                  <i className="ph ph-trash" style={{fontSize: '1.2rem'}}></i>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
                     })}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Modal Footer with bulk Save & Cancel */}
+              <div className="modal-footer" style={{display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem', borderTop: '1px solid var(--border-light)', paddingTop: '1.25rem'}}>
+                <button className="btn btn-secondary" onClick={() => setActiveCell(null)}>Hủy</button>
+                <button className="btn btn-primary" onClick={handleBulkSave}>Lưu</button>
               </div>
             </div>
           </div>
@@ -1768,7 +2072,7 @@ function App() {
             {/* Scheduling Button below branch list */}
             <button className="btn btn-outline" 
                     style={{marginTop: '1.5rem', width: '100%', padding: '1rem', borderRadius: '12px'}}
-                    onClick={() => setHubView('scheduling')}>
+                    onClick={() => setHubView(window.innerWidth <= 768 ? 'menu' : 'scheduling')}>
               <i className="ph ph-calendar-plus" style={{fontSize: '1.2rem'}}></i> Sắp Ca Nhân Viên Toàn Hệ Thống
             </button>
             
@@ -1784,32 +2088,33 @@ function App() {
   return (
     <>
       <div className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
-        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem'}}>
-          <div className="logo">
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: isSidebarCollapsed ? 'center' : 'flex-start', marginBottom: '1rem', width: '100%'}}>
+          <div className="logo" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} style={{cursor: 'pointer', display: 'flex', justifyContent: 'center'}} title={isSidebarCollapsed ? "The Capital Coffee" : ""}>
             <img src="/logo_icon.png" alt="Logo" style={{height: '32px', width: '32px', borderRadius: '50%', objectFit: 'cover'}} /> <span>The Capital Coffee</span>
           </div>
-          <button className="sidebar-toggle" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
-            <i className={`ph ${isSidebarCollapsed ? 'ph-list' : 'ph-caret-left'}`}></i>
-          </button>
         </div>
         <ul className="nav-links">
-          <li><div className={`nav-link ${currentView === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentView('dashboard')}><i className="ph ph-squares-four" style={{fontSize: '1.2rem'}}></i> <span>Dashboard</span></div></li>
-          <li><div className={`nav-link ${currentView === 'employees' ? 'active' : ''}`} onClick={() => setCurrentView('employees')}><i className="ph ph-users" style={{fontSize: '1.2rem'}}></i> <span>Nhân Viên</span></div></li>
-          <li><div className={`nav-link ${currentView === 'menu' ? 'active' : ''}`} onClick={() => setCurrentView('menu')}><i className="ph ph-coffee" style={{fontSize: '1.2rem'}}></i> <span>Sản Phẩm</span></div></li>
+          <li><div className={`nav-link ${currentView === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentView('dashboard')} title={isSidebarCollapsed ? "Dashboard" : ""}><i className="ph ph-squares-four" style={{fontSize: '1.2rem'}}></i> <span>Dashboard</span></div></li>
+          <li><div className={`nav-link ${currentView === 'employees' ? 'active' : ''}`} onClick={() => setCurrentView('employees')} title={isSidebarCollapsed ? "Nhân Viên" : ""}><i className="ph ph-users" style={{fontSize: '1.2rem'}}></i> <span>Nhân Viên</span></div></li>
+          <li><div className={`nav-link ${currentView === 'menu' ? 'active' : ''}`} onClick={() => setCurrentView('menu')} title={isSidebarCollapsed ? "Sản Phẩm" : ""}><i className="ph ph-coffee" style={{fontSize: '1.2rem'}}></i> <span>Sản Phẩm</span></div></li>
           {/* Note: Timekeeping is removed from Branch View as per user requirements */}
-          <li><div className={`nav-link ${currentView === 'inventory' ? 'active' : ''}`} onClick={() => setCurrentView('inventory')}><i className="ph ph-package" style={{fontSize: '1.2rem'}}></i> <span>Kiểm Kho</span></div></li>
-          <li><div className={`nav-link ${currentView === 'sales' ? 'active' : ''}`} onClick={() => setCurrentView('sales')}><i className="ph ph-shopping-cart" style={{fontSize: '1.2rem'}}></i> <span>Doanh Số</span></div></li>
-          <li><div className={`nav-link ${currentView === 'financials' ? 'active' : ''}`} onClick={() => setCurrentView('financials')}><i className="ph ph-money" style={{fontSize: '1.2rem'}}></i> <span>Tài Chính</span></div></li>
-          <li><div className={`nav-link ${currentView === 'reports' ? 'active' : ''}`} onClick={() => setCurrentView('reports')}><i className="ph ph-chart-line-up" style={{fontSize: '1.2rem'}}></i> <span>Báo Cáo</span></div></li>
+          <li><div className={`nav-link ${currentView === 'inventory' ? 'active' : ''}`} onClick={() => setCurrentView('inventory')} title={isSidebarCollapsed ? "Kiểm Kho" : ""}><i className="ph ph-package" style={{fontSize: '1.2rem'}}></i> <span>Kiểm Kho</span></div></li>
+          <li><div className={`nav-link ${currentView === 'sales' ? 'active' : ''}`} onClick={() => setCurrentView('sales')} title={isSidebarCollapsed ? "Doanh Số" : ""}><i className="ph ph-shopping-cart" style={{fontSize: '1.2rem'}}></i> <span>Doanh Số</span></div></li>
+          <li><div className={`nav-link ${currentView === 'financials' ? 'active' : ''}`} onClick={() => setCurrentView('financials')} title={isSidebarCollapsed ? "Tài Chính" : ""}><i className="ph ph-money" style={{fontSize: '1.2rem'}}></i> <span>Tài Chính</span></div></li>
+          <li><div className={`nav-link ${currentView === 'reports' ? 'active' : ''}`} onClick={() => setCurrentView('reports')} title={isSidebarCollapsed ? "Báo Cáo" : ""}><i className="ph ph-chart-line-up" style={{fontSize: '1.2rem'}}></i> <span>Báo Cáo</span></div></li>
         </ul>
-        {/* Theme toggle moved to header */}
+        <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center' }}>
+          <button className="sidebar-toggle" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} title={isSidebarCollapsed ? "Mở rộng Sidebar" : "Thu gọn Sidebar"} style={{ background: 'var(--sidebar-active-bg)', border: '1px solid var(--sidebar-border)', borderRadius: '8px', width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+            <i className={`ph ${isSidebarCollapsed ? 'ph-list' : 'ph-caret-left'}`} style={{fontSize: '1.2rem'}}></i>
+          </button>
+        </div>
       </div>
 
       <div className={`main-content ${isSidebarCollapsed ? 'expanded' : ''}`}>
         <div className="header">
           <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
             {currentView !== 'branch-menu' && (
-              <button className="btn btn-secondary btn-small" onClick={() => setCurrentView('branch-menu')} title="Quay lại Menu" style={{width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0}}>
+              <button className="btn btn-secondary btn-small mobile-back-btn" onClick={() => setCurrentView('branch-menu')} title="Quay lại Menu" style={{width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0}}>
                 <i className="ph ph-arrow-left" style={{fontSize: '1.2rem'}}></i>
               </button>
             )}
@@ -1844,6 +2149,21 @@ function App() {
         {renderView()}
       </div>
       {renderEmployeeModal()}
+      
+      <div className="floating-actions">
+        {currentView === 'menu' && (
+          <button className="fab-btn fab-add" onClick={() => setShowMenuModal(true)} title="Thêm Sản Phẩm">
+            <i className="ph ph-plus"></i>
+          </button>
+        )}
+        <button 
+          className={`fab-btn fab-top ${showScrollTop ? 'visible' : ''}`} 
+          onClick={scrollToTop} 
+          title="Lên đầu trang"
+        >
+          <i className="ph ph-arrow-up"></i>
+        </button>
+      </div>
     </>
   )
 }

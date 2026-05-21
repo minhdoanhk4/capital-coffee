@@ -72,7 +72,33 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  
+  /* Custom scrollbar styling for Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-light) var(--bg-primary);
 }
+
+/* Custom Scrollbar Styling (Chrome, Safari, Edge, Opera) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 9999px;
+  border: 2px solid var(--bg-primary);
+  transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
 
 body {
   font-family: var(--font-sans);
@@ -96,10 +122,10 @@ body {
   width: 260px;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--sidebar-border);
-  padding: 2rem 1.5rem;
+  padding: 1.25rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 2.5rem;
+  gap: 1rem;
   position: fixed;
   height: 100vh;
   z-index: 100;
@@ -109,7 +135,7 @@ body {
 
 .sidebar.collapsed {
   width: 80px;
-  padding: 2rem 0.75rem;
+  padding: 1.25rem 0.75rem;
 }
 
 .logo {
@@ -131,14 +157,35 @@ body {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.nav-links::-webkit-scrollbar {
+  width: 4px;
+}
+
+.nav-links::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nav-links::-webkit-scrollbar-thumb {
+  background: var(--sidebar-border);
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+.nav-links::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
 }
 
 .nav-link {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.85rem 1rem;
+  padding: 0.65rem 0.85rem;
   color: var(--sidebar-text);
   text-decoration: none;
   border-radius: 12px;
@@ -588,7 +635,11 @@ tr:hover {
   display: block;
 }
 
-/* Mobile Responsiveness */
+.mobile-back-btn {
+  display: none !important;
+}
+
+/* Mobile Responsiveness — Apple HIG / Samsung One UI Standard Spacing */
 @media (max-width: 768px) {
   #root {
     flex-direction: column !important;
@@ -598,52 +649,60 @@ tr:hover {
     display: none !important;
   }
 
+  /* 16px safe-area horizontal padding (Apple/Samsung standard) */
   .main-content {
     margin-left: 0 !important;
-    padding: 1.5rem !important;
+    padding: 0 16px 24px !important;
   }
 
   .header {
     flex-direction: column !important;
     align-items: flex-start !important;
-    gap: 1rem !important;
+    gap: 12px !important;
+    padding: 16px 0 12px !important;
   }
 
   .modal-content {
     width: 95% !important;
-    padding: 1.5rem !important;
+    padding: 20px !important;
+    border-radius: 16px !important;
   }
 
   .modal-overlay {
     display: flex !important;
   }
 
-  /* Login screen adjustments */
+  /* Login screen */
   .login-container {
     flex-direction: column !important;
     height: auto !important;
   }
 
   .login-left {
-    height: 300px !important;
-    padding: 2rem !important;
+    height: 220px !important;
+    padding: 20px !important;
     justify-content: center !important;
   }
 
   .login-right {
     width: 100% !important;
-    padding: 2rem !important;
+    padding: 24px 20px !important;
     border-left: none !important;
     border-top: 1px solid var(--border) !important;
   }
 
-  /* Scheduling screen adjustments */
+  /* Back button */
+  .mobile-back-btn {
+    display: flex !important;
+  }
+
+  /* Scheduling */
   .scheduling-container {
     flex-direction: column !important;
   }
 
   .scheduling-main {
-    padding: 1rem !important;
+    padding: 16px !important;
   }
 
   .scheduling-container #scheduling-table.card {
@@ -654,19 +713,29 @@ tr:hover {
     width: 100% !important;
     border-right: none !important;
     border-bottom: 1px solid var(--sidebar-border) !important;
-    gap: 1rem !important;
-    padding: 1rem !important;
+    gap: 12px !important;
+    padding: 16px !important;
   }
 
-  .scheduling-sidebar .form-group {
-    margin-bottom: 0.75rem !important;
+  /* Calendar month: allow horizontal scroll */
+  .calendar-grid {
+    min-width: 560px;
   }
 
-  .scheduling-sidebar select, 
-  .scheduling-sidebar input {
-    padding: 0.4rem 0.5rem !important;
+  /* Week view: vertical stack on mobile (1 col) */
+  .week-grid {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
   }
 
+  /* Day view: vertical stack */
+  .day-grid {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  /* Mobile / Desktop toggles */
   .mobile-only {
     display: block !important;
   }
@@ -675,82 +744,181 @@ tr:hover {
     display: none !important;
   }
 
+  /* Hub menu grid: 2-col */
   .menu-grid {
     display: grid !important;
-  }
-  
-  .grid {
-    grid-template-columns: 1fr !important;
-  }
-  
-  .menu-grid {
     grid-template-columns: repeat(2, 1fr) !important;
-    gap: 1rem !important;
+    gap: 12px !important;
   }
 
-  /* Touch target and scale adjustments */
+  .grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* Typography */
   body {
-    font-size: 14px !important;
+    font-size: 15px !important; /* Slightly larger than 14 — Samsung default is 15 */
   }
 
   .title {
-    font-size: 1.2rem !important;
+    font-size: 1.15rem !important;
   }
 
   .section-header {
     flex-direction: column !important;
     align-items: flex-start !important;
-    gap: 0.75rem !important;
+    gap: 12px !important;
   }
 
   .card h2 {
-    font-size: 1.1rem !important;
+    font-size: 1.05rem !important;
     line-height: 1.4 !important;
   }
 
+  /* Cards: 16px padding (Apple/Samsung standard) */
   .card {
-    padding: 1rem !important;
+    padding: 16px !important;
+    border-radius: 14px !important;
+    margin-bottom: 0 !important;
   }
 
+  /* Hub menu grid card */
+  .menu-grid .card {
+    padding: 20px 16px !important;
+    text-align: center !important;
+    gap: 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+
+  .menu-grid .card i {
+    font-size: 1.75rem !important;
+  }
+
+  .menu-grid .card h3 {
+    font-size: 0.875rem !important;
+    margin-top: 6px !important;
+  }
+
+  /* Buttons: 44px min touch target (Apple HIG minimum) */
   .btn {
-    padding: 0.6rem 1rem !important;
+    min-height: 44px !important;
+    padding: 0 16px !important;
     font-size: 0.9rem !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 0.5rem !important;
+    gap: 6px !important;
+    border-radius: 10px !important;
   }
 
+  /* Small buttons can be slightly shorter but still touch-friendly */
+  .btn.btn-small {
+    min-height: 36px !important;
+    padding: 0 12px !important;
+    font-size: 0.825rem !important;
+  }
+
+  /* Tables */
   table th, table td {
     font-size: 0.85rem !important;
-    padding: 0.6rem 0.5rem !important;
+    padding: 10px 8px !important;
     white-space: nowrap !important;
   }
 
   .table-container {
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch !important;
+    border-radius: 12px !important;
   }
 
   table {
-    min-width: 500px !important;
+    min-width: 480px !important;
   }
 
-  .menu-grid .card {
-    padding: 1rem 0.75rem !important;
-  }
-
-  .menu-grid .card i {
-    font-size: 1.5rem !important;
-  }
-
-  .menu-grid .card h3 {
-    font-size: 0.85rem !important;
-  }
-
+  /* Form inputs: 44px touch target, 16px prevents iOS zoom */
   input, select, textarea {
-    padding: 0.6rem !important;
-    font-size: 16px !important; /* Keep 16px to prevent iOS auto-zoom */
+    min-height: 44px !important;
+    padding: 10px 14px !important;
+    font-size: 16px !important;
+    border-radius: 10px !important;
+  }
+
+  /* Scheduling toolbar */
+  .scheduling-toolbar {
+    margin-bottom: 16px !important;
+  }
+
+  .scheduling-toolbar .title {
+    font-size: 1.1rem !important;
+    margin-bottom: 0 !important;
+  }
+
+  .scheduling-toolbar-subtitle {
+    display: none !important;
+  }
+
+  .scheduling-toolbar .btn {
+    min-height: 40px !important;
+    padding: 0 14px !important;
+    font-size: 0.875rem !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* View Dropdown Menu (Outlook-style) */
+.view-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.45);
+  min-width: 160px;
+  padding: 0.4rem;
+  z-index: 200;
+  animation: dropdownFadeIn 0.15s ease;
+}
+
+@keyframes dropdownFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.view-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.view-dropdown-item:hover {
+  background: var(--bg-hover);
+}
+
+.view-dropdown-item.active {
+  background: rgba(197, 160, 89, 0.15);
+  color: var(--accent);
+}
+
+.view-dropdown-item.active i {
+  color: var(--accent);
+}
+
+/* On mobile: hide the text label, show only icon + caret */
+@media (max-width: 768px) {
+  .view-dropdown-label {
+    display: none;
   }
 }
 
@@ -1120,7 +1288,14 @@ tr:hover {
 .hub-mobile-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.4rem;
+}
+
+.hub-mobile-actions .btn {
+  font-size: 0.78rem !important;
+  padding: 0.3rem 0.55rem !important;
+  height: 30px;
+  white-space: nowrap;
 }
 
 .hub-mobile-tabs {
@@ -1157,3 +1332,79 @@ tr:hover {
   border-color: var(--accent);
 }
 
+/* Floating Action Buttons */
+.floating-actions {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  z-index: 100;
+}
+
+.fab-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fab-btn:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+}
+
+.fab-btn:active {
+  transform: translateY(0) scale(0.95);
+}
+
+.fab-add {
+  background-color: var(--accent);
+  color: var(--btn-text);
+}
+
+.fab-top {
+  background-color: var(--bg-secondary);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(20px);
+}
+
+.fab-top.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.fab-top.visible:hover {
+  transform: translateY(-3px) scale(1.05);
+}
+
+@media (max-width: 768px) {
+  .floating-actions {
+    bottom: 1.5rem;
+    right: 1.5rem;
+    gap: 0.75rem;
+  }
+  .fab-btn {
+    width: 46px;
+    height: 46px;
+    font-size: 1.3rem;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-back-btn {
+    display: none !important;
+  }
+}
