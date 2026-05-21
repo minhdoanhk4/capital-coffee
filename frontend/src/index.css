@@ -831,7 +831,7 @@ tr:hover {
 }
 
 .accordion-content-container.expanded {
-  max-height: 2000px;
+  max-height: 10000px;
   opacity: 1;
   visibility: visible;
   padding: 0.5rem 1rem 1.5rem 1rem;
