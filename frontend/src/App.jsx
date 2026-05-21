@@ -870,10 +870,10 @@ function App() {
                                 </div>
                                 <div className="menu-item-card-footer">
                                   <button onClick={() => handleOpenEditMenuItem(m)} className="btn btn-secondary btn-small" title="Sửa">
-                                    <i className="ph ph-pencil-simple"></i> Sửa
+                                    <i className="ph ph-pencil-simple"></i> <span className="btn-text">Sửa</span>
                                   </button>
                                   <button onClick={() => handleDeleteMenuItem(m.id)} className="btn btn-danger btn-small" title="Xóa">
-                                    <i className="ph ph-trash"></i> Xóa
+                                    <i className="ph ph-trash"></i> <span className="btn-text">Xóa</span>
                                   </button>
                                 </div>
                               </div>
