@@ -1,32 +1,33 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --bg-primary: #0a0a0b; 
-  --bg-secondary: #121214;
-  --text-primary: #ffffff;
-  --text-secondary: #8a8a93;
-  --accent: #c5a059;
-  --accent-hover: #e5ba73;
-  --border: rgba(197, 160, 89, 0.15);
-  
+  --bg-primary: #110d0c;
+  --bg-secondary: #1c1615;
+  --text-primary: #fafaf9;
+  --text-secondary: #a8a29e;
+  --accent: #10b981;
+  --accent-hover: #34d399;
+  --accent-rgb: 16, 185, 129;
+  --border: rgba(var(--accent-rgb), 0.15);
+
   /* UI Element colors */
-  --bg-input: #0b0b0d;
+  --bg-input: #14100f;
   --bg-hover: rgba(255, 255, 255, 0.05);
   --bg-table-header: rgba(255, 255, 255, 0.02);
   --border-light: rgba(255, 255, 255, 0.1);
   --border-faint: rgba(255, 255, 255, 0.05);
   --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-  --title-color: #ffffff;
+  --title-color: #fafaf9;
   --color-danger: #ff4444;
-  --color-success: #4ade80;
-  --btn-text: #000000;
-  
+  --color-success: #34d399;
+  --btn-text: #110d0c;
+
   /* Sidebar variables */
   --sidebar-bg: var(--bg-secondary);
   --sidebar-text: var(--text-secondary);
   --sidebar-text-hover: var(--text-primary);
   --sidebar-title: var(--title-color);
-  --sidebar-active-bg: rgba(197, 160, 89, 0.1);
+  --sidebar-active-bg: rgba(var(--accent-rgb), 0.1);
   --sidebar-active-text: var(--accent);
   --sidebar-border: var(--border-faint);
 
@@ -36,34 +37,35 @@
 }
 
 :root[data-theme="light"] {
-  --bg-primary: #f3f4f6;
+  --bg-primary: #fcfbfa;
   --bg-secondary: #ffffff;
-  --text-primary: #111827;
-  --text-secondary: #6b7280;
-  --accent: #b58d3c;
-  --accent-hover: #9c782f;
-  --border: rgba(181, 141, 60, 0.3);
-  
+  --text-primary: #1c1615;
+  --text-secondary: #6b5c56;
+  --accent: #0b7a57;
+  --accent-hover: #085c41;
+  --accent-rgb: 11, 122, 87;
+  --border: rgba(var(--accent-rgb), 0.22);
+
   /* UI Element colors */
   --bg-input: #ffffff;
-  --bg-hover: rgba(0, 0, 0, 0.05);
+  --bg-hover: rgba(0, 0, 0, 0.04);
   --bg-table-header: rgba(0, 0, 0, 0.02);
-  --border-light: rgba(0, 0, 0, 0.15);
-  --border-faint: rgba(0, 0, 0, 0.08);
-  --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
-  --title-color: #111827;
+  --border-light: rgba(0, 0, 0, 0.12);
+  --border-faint: rgba(0, 0, 0, 0.06);
+  --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.06);
+  --title-color: #1c1615;
   --color-danger: #dc2626;
-  --color-success: #16a34a;
+  --color-success: #0b7a57;
   --btn-text: #ffffff;
-  
-  /* Sidebar Light Mode - Dark Gold dominant */
-  --sidebar-bg: #9c782f; /* Vàng sẫm chủ đạo */
-  --sidebar-text: rgba(255, 255, 255, 0.8);
+
+  /* Sidebar Light Mode - Premium Contrast Espresso */
+  --sidebar-bg: #1c1615;
+  --sidebar-text: rgba(250, 250, 249, 0.8);
   --sidebar-text-hover: #ffffff;
   --sidebar-title: #ffffff;
-  --sidebar-active-bg: rgba(0, 0, 0, 0.15);
-  --sidebar-active-text: #ffffff;
-  --sidebar-border: rgba(0, 0, 0, 0.1);
+  --sidebar-active-bg: rgba(var(--accent-rgb), 0.15);
+  --sidebar-active-text: #34d399;
+  --sidebar-border: rgba(255, 255, 255, 0.05);
 
   color-scheme: light;
 }
@@ -72,7 +74,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  
+
   /* Custom scrollbar styling for Firefox */
   scrollbar-width: thin;
   scrollbar-color: var(--border-light) var(--bg-primary);
@@ -106,9 +108,9 @@ body {
   color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(197, 160, 89, 0.08) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(197, 160, 89, 0.03) 0px, transparent 50%);
+  background-image:
+    radial-gradient(at 0% 0%, rgba(var(--accent-rgb), 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(var(--accent-rgb), 0.03) 0px, transparent 50%);
   background-attachment: fixed;
 }
 
@@ -275,7 +277,7 @@ body {
 }
 
 .card:hover {
-  border-color: rgba(197, 160, 89, 0.3);
+  border-color: rgba(var(--accent-rgb), 0.3);
   transform: translateY(-2px);
   box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
 }
@@ -301,7 +303,9 @@ label {
   font-weight: 500;
 }
 
-input, select, textarea {
+input,
+select,
+textarea {
   width: 100%;
   padding: 0.75rem 1rem;
   background: var(--bg-input);
@@ -342,7 +346,9 @@ input[type="checkbox"] {
   border-radius: 4px;
 }
 
-input:focus, select:focus, textarea:focus {
+input:focus,
+select:focus,
+textarea:focus {
   outline: none;
   border-color: var(--accent);
 }
@@ -411,7 +417,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .btn-outline:hover {
-  background: rgba(197, 160, 89, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
   transform: translateY(-1px);
 }
 
@@ -453,7 +459,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: var(--text-primary);
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: inherit;
   margin-bottom: 0.5rem;
 }
@@ -574,8 +585,15 @@ tr:hover {
 }
 
 @keyframes slideIn {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .modal-header {
@@ -610,7 +628,7 @@ tr:hover {
 }
 
 .branch-hover-effect:hover {
-  border-color: rgba(197, 160, 89, 0.5) !important;
+  border-color: rgba(var(--accent-rgb), 0.5) !important;
   background: var(--bg-hover) !important;
   transform: translateX(4px);
 }
@@ -758,7 +776,8 @@ tr:hover {
 
   /* Typography */
   body {
-    font-size: 15px !important; /* Slightly larger than 14 — Samsung default is 15 */
+    font-size: 15px !important;
+    /* Slightly larger than 14 — Samsung default is 15 */
   }
 
   .title {
@@ -822,7 +841,8 @@ tr:hover {
   }
 
   /* Tables */
-  table th, table td {
+  table th,
+  table td {
     font-size: 0.85rem !important;
     padding: 10px 8px !important;
     white-space: nowrap !important;
@@ -839,7 +859,9 @@ tr:hover {
   }
 
   /* Form inputs: 44px touch target, 16px prevents iOS zoom */
-  input, select, textarea {
+  input,
+  select,
+  textarea {
     min-height: 44px !important;
     padding: 10px 14px !important;
     font-size: 16px !important;
@@ -925,8 +947,15 @@ tr:hover {
 }
 
 @keyframes dropdownFadeIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .view-dropdown-item {
@@ -948,7 +977,7 @@ tr:hover {
 }
 
 .view-dropdown-item.active {
-  background: rgba(197, 160, 89, 0.15);
+  background: rgba(var(--accent-rgb), 0.15);
   color: var(--accent);
 }
 
@@ -984,14 +1013,14 @@ tr:hover {
 }
 
 .accordion-header-card:hover {
-  border-color: rgba(197, 160, 89, 0.4);
+  border-color: rgba(var(--accent-rgb), 0.4);
   transform: translateY(-1px);
   box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.3);
 }
 
 .accordion-header-card.active {
   border-color: var(--accent);
-  background: rgba(197, 160, 89, 0.03);
+  background: rgba(var(--accent-rgb), 0.03);
 }
 
 .accordion-title-wrapper {
@@ -1033,10 +1062,10 @@ tr:hover {
   opacity: 0;
   visibility: hidden;
   padding: 0 1rem;
-  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
-              opacity 0.25s ease-out, 
-              padding 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-              visibility 0.35s;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.25s ease-out,
+    padding 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0.35s;
 }
 
 .accordion-content-container.expanded {
@@ -1108,7 +1137,7 @@ tr:hover {
 
 .calendar-cell.is-today {
   border-color: var(--accent);
-  background: rgba(197, 160, 89, 0.05);
+  background: rgba(var(--accent-rgb), 0.05);
 }
 
 .calendar-date {
@@ -1181,7 +1210,7 @@ tr:hover {
 .menu-item-grid-card:hover {
   transform: translateY(-2px);
   border-color: var(--accent);
-  background: rgba(197, 160, 89, 0.03);
+  background: rgba(var(--accent-rgb), 0.03);
   box-shadow: 0 6px 15px -3px rgba(0, 0, 0, 0.4);
 }
 
@@ -1258,8 +1287,8 @@ tr:hover {
 
 .search-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(197, 160, 89, 0.12);
-  background: rgba(197, 160, 89, 0.01);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+  background: rgba(var(--accent-rgb), 0.01);
   outline: none;
 }
 
@@ -1272,7 +1301,7 @@ tr:hover {
   transition: var(--transition);
 }
 
-.search-input:focus + .search-icon {
+.search-input:focus+.search-icon {
   color: var(--accent);
 }
 
@@ -1344,7 +1373,8 @@ tr:hover {
   gap: 0.5rem;
   overflow-x: auto;
   padding-bottom: 2px;
-  scrollbar-width: none; /* Hide scrollbar for Chrome/Safari/Firefox */
+  scrollbar-width: none;
+  /* Hide scrollbar for Chrome/Safari/Firefox */
 }
 
 .hub-mobile-tabs::-webkit-scrollbar {
@@ -1394,13 +1424,13 @@ tr:hover {
   justify-content: center;
   font-size: 1.5rem;
   cursor: pointer;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .fab-btn:hover {
   transform: translateY(-3px) scale(1.05);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
 }
 
 .fab-btn:active {
@@ -1437,6 +1467,7 @@ tr:hover {
     right: 1.5rem;
     gap: 0.75rem;
   }
+
   .fab-btn {
     width: 46px;
     height: 46px;

@@ -1087,14 +1087,59 @@ function App() {
           </div>
         )
 
-      case 'sales':
+      case 'sales': {
+        // Group menu items by name
+        const groupedItems = {};
+        menuItems.forEach(item => {
+          if (!groupedItems[item.name]) {
+            groupedItems[item.name] = {
+              name: item.name,
+              category: item.category,
+              M: null,
+              L: null,
+              XL: null,
+              other: null
+            };
+          }
+          
+          const size = item.size ? item.size.trim().toUpperCase() : 'OTHER';
+          if (size === 'M') {
+            groupedItems[item.name].M = item;
+          } else if (size === 'L') {
+            groupedItems[item.name].L = item;
+          } else if (size === 'XL') {
+            groupedItems[item.name].XL = item;
+          } else {
+            groupedItems[item.name].other = item;
+          }
+        });
+
+        const salesCategoryOrder = ['Cà phê', 'Phindi', 'Latte', 'Trà', 'Đá xay', 'Food', 'Topping', 'Kem', 'Combo', 'Khác'];
+        const groupedList = Object.values(groupedItems).sort((a, b) => {
+          const catA = a.category || 'Khác';
+          const catB = b.category || 'Khác';
+          const indexA = salesCategoryOrder.indexOf(catA);
+          const indexB = salesCategoryOrder.indexOf(catB);
+          
+          const finalIndexA = indexA !== -1 ? indexA : salesCategoryOrder.length;
+          const finalIndexB = indexB !== -1 ? indexB : salesCategoryOrder.length;
+          
+          if (finalIndexA !== finalIndexB) {
+            return finalIndexA - finalIndexB;
+          }
+          return a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' });
+        });
+
         return (
           <div>
             <div className="card">
               <div className="section-header">
-                <h2 style={{marginBottom: 0}}>Nhập Doanh Số Bán Hàng ({currentBranch.name})</h2>
+                <div>
+                  <h2 style={{marginBottom: 0}}>Nhập Doanh Số Bán Hàng ({currentBranch.name})</h2>
+                  <p style={{color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem'}}>Nhập số lượng ly bán ra cuối ngày theo từng size của món.</p>
+                </div>
                 <div style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
-                  <label style={{marginBottom: 0}}>Ngày:</label>
+                  <label style={{marginBottom: 0, fontWeight: '600'}}>Ngày bán:</label>
                   <input type="date" value={salesDate} onChange={e => setSalesDate(e.target.value)} style={{width: '200px'}} />
                 </div>
               </div>
@@ -1103,23 +1148,111 @@ function App() {
                 <table className="no-hover-table">
                   <thead>
                     <tr>
-                      <th>Sản Phẩm</th>
-                      <th>Giá Bán</th>
-                      <th>Số Lượng Bán</th>
+                      <th style={{width: '40%'}}>Tên Món Ăn / Thức Uống</th>
+                      <th style={{textAlign: 'center', width: '15%'}}>Size M</th>
+                      <th style={{textAlign: 'center', width: '15%'}}>Size L</th>
+                      <th style={{textAlign: 'center', width: '15%'}}>Size XL</th>
+                      <th style={{textAlign: 'center', width: '15%'}}>Không Size / Khác</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {menuItems.map(item => (
-                      <tr key={item.id}>
-                        <td style={{fontWeight: '600'}}>{item.name}</td>
-                        <td>{item.price.toLocaleString()} đ</td>
-                        <td>
-                          <input type="number" value={salesInput[item.id] || 0} onChange={e => {
-                            setSalesInput({
-                              ...salesInput,
-                              [item.id]: parseInt(e.target.value) || 0
-                            })
-                          }} style={{width: '100px'}} />
+                    {groupedList.map(group => (
+                      <tr key={group.name}>
+                        <td style={{fontWeight: '600', color: 'var(--title-color)'}}>
+                          {group.name}
+                          <span style={{
+                            display: 'block', 
+                            fontSize: '0.75rem', 
+                            color: 'var(--text-secondary)', 
+                            fontWeight: 'normal',
+                            marginTop: '0.25rem'
+                          }}>
+                            {group.category || 'Khác'}
+                          </span>
+                        </td>
+                        
+                        {/* Size M */}
+                        <td style={{textAlign: 'center'}}>
+                          {group.M ? (
+                            <input 
+                              type="number" 
+                              min="0"
+                              value={salesInput[group.M.id] !== undefined ? salesInput[group.M.id] : ''} 
+                              placeholder="0"
+                              onChange={e => {
+                                setSalesInput({
+                                  ...salesInput,
+                                  [group.M.id]: parseInt(e.target.value) || 0
+                                });
+                              }} 
+                              style={{width: '80px', textAlign: 'center'}} 
+                            />
+                          ) : (
+                            <span style={{color: 'var(--border-light)'}}>—</span>
+                          )}
+                        </td>
+                        
+                        {/* Size L */}
+                        <td style={{textAlign: 'center'}}>
+                          {group.L ? (
+                            <input 
+                              type="number" 
+                              min="0"
+                              value={salesInput[group.L.id] !== undefined ? salesInput[group.L.id] : ''} 
+                              placeholder="0"
+                              onChange={e => {
+                                setSalesInput({
+                                  ...salesInput,
+                                  [group.L.id]: parseInt(e.target.value) || 0
+                                });
+                              }} 
+                              style={{width: '80px', textAlign: 'center'}} 
+                            />
+                          ) : (
+                            <span style={{color: 'var(--border-light)'}}>—</span>
+                          )}
+                        </td>
+                        
+                        {/* Size XL */}
+                        <td style={{textAlign: 'center'}}>
+                          {group.XL ? (
+                            <input 
+                              type="number" 
+                              min="0"
+                              value={salesInput[group.XL.id] !== undefined ? salesInput[group.XL.id] : ''} 
+                              placeholder="0"
+                              onChange={e => {
+                                setSalesInput({
+                                  ...salesInput,
+                                  [group.XL.id]: parseInt(e.target.value) || 0
+                                });
+                              }} 
+                              style={{width: '80px', textAlign: 'center'}} 
+                            />
+                          ) : (
+                            <span style={{color: 'var(--border-light)'}}>—</span>
+                          )}
+                        </td>
+                        
+                        {/* Other / No Size */}
+                        <td style={{textAlign: 'center'}}>
+                          {group.other ? (
+                            <input 
+                              type="number" 
+                              min="0"
+                              value={salesInput[group.other.id] !== undefined ? salesInput[group.other.id] : ''} 
+                              placeholder="0"
+                              onChange={e => {
+                                setSalesInput({
+                                  ...salesInput,
+                                  [group.other.id]: parseInt(e.target.value) || 0
+                                });
+                              }} 
+                              style={{width: '80px', textAlign: 'center'}} 
+                            />
+                          ) : (
+                            <span style={{color: 'var(--border-light)'}}>—</span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -1127,32 +1260,44 @@ function App() {
                 </table>
               </div>
               
-              <button className="btn btn-primary" style={{marginTop: '1.5rem'}} onClick={async () => {
-                const salesData = menuItems.map(item => ({
-                  branch_id: currentBranch.id,
-                  sale_date: salesDate,
-                  item_id: item.id,
-                  quantity_sold: salesInput[item.id] || 0
-                }));
-                
-                try {
-                  const res = await fetch(`${API_URL}/sales/daily`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(salesData)
-                  });
-                  if (res.ok) {
-                    alert('Lưu doanh số thành công!');
-                    setSalesInput({});
-                  } else {
-                    const err = await res.json();
-                    alert(`Lỗi: ${err.message}`);
+              <div style={{marginTop: '2rem', display: 'flex', gap: '1rem'}}>
+                <button className="btn btn-primary" onClick={async () => {
+                  const salesData = menuItems.map(item => ({
+                    branch_id: currentBranch.id,
+                    sale_date: salesDate,
+                    item_id: item.id,
+                    quantity_sold: salesInput[item.id] || 0
+                  }));
+                  
+                  try {
+                    const res = await fetch(`${API_URL}/sales/daily`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(salesData)
+                    });
+                    if (res.ok) {
+                      alert('Lưu doanh số thành công!');
+                      setSalesInput({});
+                    } else {
+                      const err = await res.json();
+                      alert(`Lỗi: ${err.message}`);
+                    }
+                  } catch (err) { 
+                    console.error(err);
+                    alert('Lỗi kết nối máy chủ!');
                   }
-                } catch (err) { console.error(err); }
-              }}>Lưu Doanh Số</button>
+                }}>
+                  <i className="ph ph-floppy-disk"></i> Lưu Doanh Số Cuối Ngày
+                </button>
+                
+                <button className="btn btn-secondary" onClick={() => setSalesInput({})}>
+                  <i className="ph ph-arrows-counter-clockwise"></i> Reset Nhập Liệu
+                </button>
+              </div>
             </div>
           </div>
         )
+      }
 
       case 'financials':
         return (
@@ -2016,12 +2161,14 @@ function App() {
           <div style={{
             position: 'absolute', 
             top: 0, left: 0, right: 0, bottom: 0, 
-            background: theme === 'dark' ? 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.3) 100%)' : 'linear-gradient(to top, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.6) 100%)',
+            background: theme === 'dark' 
+              ? 'linear-gradient(to top, rgba(17, 13, 12, 0.96) 0%, rgba(16, 185, 129, 0.22) 100%)' 
+              : 'linear-gradient(to top, rgba(17, 13, 12, 0.93) 0%, rgba(16, 185, 129, 0.26) 100%)',
             transition: 'background 0.3s'
           }} />
           <div style={{position: 'relative', zIndex: 1}}>
-            <h1 style={{fontSize: '3.5rem', fontWeight: '700', color: theme === 'dark' ? '#fff' : '#111827', marginBottom: '0.5rem', letterSpacing: '-0.05em'}}>The Capital Coffee</h1>
-            <p style={{color: theme === 'dark' ? 'rgba(255,255,255,0.8)' : 'rgba(17,24,39,0.8)', fontSize: '1.2rem', marginTop: '0.5rem', fontWeight: '500'}}>Hệ thống quản lý vận hành chuỗi cửa hàng chuyên nghiệp.</p>
+            <h1 style={{fontSize: '3.5rem', fontWeight: '700', color: '#ffffff', marginBottom: '0.5rem', letterSpacing: '-0.05em'}}>The Capital Coffee</h1>
+            <p style={{color: 'rgba(255, 255, 255, 0.85)', fontSize: '1.2rem', marginTop: '0.5rem', fontWeight: '500'}}>Hệ thống quản lý vận hành chuỗi cửa hàng chuyên nghiệp.</p>
           </div>
         </div>
 
